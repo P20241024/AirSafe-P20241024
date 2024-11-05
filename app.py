@@ -1,4 +1,6 @@
+!pip install streamlit pandas numpy scikit-learn xgboost matplotlib joblib
 import streamlit as st
+from google.colab import drive
 import pandas as pd
 import numpy as np
 import joblib
@@ -6,8 +8,8 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolu
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
+drive.mount('/content/drive')
 # Cargar modelos pre-entrenados
-modelo_stacking = joblib.load('/content/drive/MyDrive/model_stacking.pkl')
 modelo_linear_regression = joblib.load('/content/drive/MyDrive/model_linearRegression.pkl')
 modelo_random_forest = joblib.load('/content/drive/MyDrive/model_randomForestRegressor.pkl')
 modelo_svr = joblib.load('/content/drive/MyDrive/model_svr.pkl')
@@ -48,14 +50,12 @@ def predecir_concentracion_co2(modelo, year, month, day, hour, temp, humidity, l
     return modelo.predict(data)[0]
 
 # Predicciones de diferentes modelos
-stacking_pred = predecir_concentracion_co2(modelo_stacking, year, month, day, hour, temperature, humidity, light_intensity)
 linear_pred = predecir_concentracion_co2(modelo_linear_regression, year, month, day, hour, temperature, humidity, light_intensity)
 rf_pred = predecir_concentracion_co2(modelo_random_forest, year, month, day, hour, temperature, humidity, light_intensity)
 svr_pred = predecir_concentracion_co2(modelo_svr, year, month, day, hour, temperature, humidity, light_intensity)
 
 # Mostrar predicciones
 st.subheader("Resultados de Predicción")
-st.write(f"Predicción de CO₂ usando Stacking: {stacking_pred:.2f} ppm")
 st.write(f"Predicción de CO₂ usando Regressión Lineal: {linear_pred:.2f} ppm")
 st.write(f"Predicción de CO₂ usando Random Forest: {rf_pred:.2f} ppm")
 st.write(f"Predicción de CO₂ usando SVR: {svr_pred:.2f} ppm")
@@ -64,7 +64,7 @@ st.write(f"Predicción de CO₂ usando SVR: {svr_pred:.2f} ppm")
 st.subheader("Métricas de Modelos")
 metrics = {
     "Model": ["Stacking", "Linear Regression", "Random Forest", "SVR"],
-    "Predicción CO₂ (ppm)": [stacking_pred, linear_pred, rf_pred, svr_pred]
+    "Predicción CO₂ (ppm)": [linear_pred, linear_pred, rf_pred, svr_pred]
 }
 df_metrics = pd.DataFrame(metrics)
 st.write(df_metrics)
@@ -79,7 +79,7 @@ st.pyplot(fig)
 # Predicción a lo largo del día
 st.subheader("Predicciones de CO₂ a lo largo del día")
 horas = [hour + i for i in range(6)]  # Incremento de 6 horas
-predicciones_dia = [predecir_concentracion_co2(modelo_stacking, year, month, day, h % 24, temperature, humidity, light_intensity) for h in horas]
+predicciones_dia = [predecir_concentracion_co2(modelo_linear_regression, year, month, day, h % 24, temperature, humidity, light_intensity) for h in horas]
 
 fig, ax = plt.subplots()
 ax.plot(horas, predicciones_dia, marker='o')
