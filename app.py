@@ -1,88 +1,74 @@
-!pip install streamlit pandas numpy scikit-learn xgboost matplotlib joblib
 import streamlit as st
-from google.colab import drive
 import pandas as pd
 import numpy as np
 import joblib
-from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-drive.mount('/content/drive')
-# Cargar modelos pre-entrenados
-modelo_linear_regression = joblib.load('/content/drive/MyDrive/model_linearRegression.pkl')
-modelo_random_forest = joblib.load('/content/drive/MyDrive/model_randomForestRegressor.pkl')
-modelo_svr = joblib.load('/content/drive/MyDrive/model_svr.pkl')
+# Cargar el modelo y el escalador
+stacking_model = joblib.load('/content/drive/MyDrive/model_randomForestRegressor.pkl')  # Modifica esta ruta
+scaler = joblib.load('/content/drive/MyDrive/scaler.pkl')  # Asegúrate de tener el escalador guardado también
 
-# Título de la app
-st.title("Predicción de Concentración de CO₂")
+# Configurar la página de Streamlit
+st.title("Predicción de CO₂ en Entornos Subterráneos")
+st.write("Este sistema permite predecir la concentración de CO₂ basándose en parámetros ambientales.")
 
-# Cargar datos de muestra
-@st.cache
-def cargar_datos():
-    df = pd.read_excel("/content/drive/MyDrive/Data/data_1k_tesis_CO2.xlsx")
-    return df
+# Entradas para predicción
+st.sidebar.header("Parámetros de entrada")
+year = st.sidebar.selectbox("Año", options=[2022, 2023, 2024], index=0)
+month = st.sidebar.selectbox("Mes", options=list(range(1, 13)), index=3)
+day = st.sidebar.selectbox("Día", options=list(range(1, 29)), index=19)
+hour = st.sidebar.selectbox("Hora", options=list(range(0, 24)), index=14)
 
-df = cargar_datos()
+temperature = st.sidebar.slider("Temperatura (°C)", 0.0, 40.0, 25.0)
+humidity = st.sidebar.slider("Humedad (%)", 0.0, 100.0, 50.0)
+light_intensity = st.sidebar.slider("Intensidad de luz (lux)", 0.0, 2000.0, 500.0)
 
-# Ajustes en los datos
-df['Temperature'] = df['Temperature'].apply(lambda x: max(0, x))
-df['Humidity'] = df['Humidity'].apply(lambda x: max(0, x))
-df['Light intensity'] = df['Light intensity'].apply(lambda x: max(0, x))
-df = df.dropna()
+# Preparar los datos de entrada
+input_data = pd.DataFrame({
+    'Year': [year],
+    'Month': [month],
+    'Day': [day],
+    'Hour': [hour],
+    'Temperature': [temperature],
+    'Humidity': [humidity],
+    'Light intensity': [light_intensity]
+})
 
-# Obtener valores de entrada del usuario
-st.sidebar.header("Parámetros de Entrada")
-temperature = st.sidebar.slider("Temperatura (°C)", float(df['Temperature'].min()), float(df['Temperature'].max()), float(df['Temperature'].mean()))
-humidity = st.sidebar.slider("Humedad (%)", float(df['Humidity'].min()), float(df['Humidity'].max()), float(df['Humidity'].mean()))
-light_intensity = st.sidebar.slider("Intensidad de Luz (lux)", float(df['Light intensity'].min()), float(df['Light intensity'].max()), float(df['Light intensity'].mean()))
-year = st.sidebar.selectbox("Año", [2018, 2019, 2020])
-month = st.sidebar.selectbox("Mes", list(range(1, 13)))
-day = st.sidebar.selectbox("Día", list(range(1, 29)))
-hour = st.sidebar.slider("Hora del día", 0, 23, 12)
+# Escalar los datos
+input_data_scaled = scaler.transform(input_data)
 
-# Función para predicción
-def predecir_concentracion_co2(modelo, year, month, day, hour, temp, humidity, light_intensity):
-    data = pd.DataFrame({
-        'Year': [year], 'Month': [month], 'Day': [day], 'Hour': [hour],
-        'Temperature': [temp], 'Humidity': [humidity], 'Light intensity': [light_intensity]
-    })
-    return modelo.predict(data)[0]
+# Realizar predicción
+co2_prediction = stacking_model.predict(input_data_scaled)[0]
+st.subheader("Predicción de CO₂:")
+st.metric("Concentración de CO₂ predicha (ppm)", f"{co2_prediction:.2f}")
 
-# Predicciones de diferentes modelos
-linear_pred = predecir_concentracion_co2(modelo_linear_regression, year, month, day, hour, temperature, humidity, light_intensity)
-rf_pred = predecir_concentracion_co2(modelo_random_forest, year, month, day, hour, temperature, humidity, light_intensity)
-svr_pred = predecir_concentracion_co2(modelo_svr, year, month, day, hour, temperature, humidity, light_intensity)
+# Simulación y gráficos
+st.subheader("Predicción de CO₂ para las próximas horas")
+num_hours = st.slider("Horas a predecir", 1, 12, 6)
+future_predictions = []
 
-# Mostrar predicciones
-st.subheader("Resultados de Predicción")
-st.write(f"Predicción de CO₂ usando Regressión Lineal: {linear_pred:.2f} ppm")
-st.write(f"Predicción de CO₂ usando Random Forest: {rf_pred:.2f} ppm")
-st.write(f"Predicción de CO₂ usando SVR: {svr_pred:.2f} ppm")
+# Generar predicciones para las próximas horas
+current_time = datetime(year, month, day, hour)
+for i in range(num_hours):
+    future_time = current_time + timedelta(hours=i)
+    input_data['Year'] = future_time.year
+    input_data['Month'] = future_time.month
+    input_data['Day'] = future_time.day
+    input_data['Hour'] = future_time.hour
+    input_data_scaled = scaler.transform(input_data)
+    future_co2 = stacking_model.predict(input_data_scaled)[0]
+    future_predictions.append((future_time.strftime("%Y-%m-%d %H:%M"), future_co2))
 
-# Comparación de métricas de los modelos
-st.subheader("Métricas de Modelos")
-metrics = {
-    "Model": ["Stacking", "Linear Regression", "Random Forest", "SVR"],
-    "Predicción CO₂ (ppm)": [linear_pred, linear_pred, rf_pred, svr_pred]
-}
-df_metrics = pd.DataFrame(metrics)
-st.write(df_metrics)
+# Mostrar resultados en tabla y gráficos
+future_df = pd.DataFrame(future_predictions, columns=["Fecha y Hora", "CO₂ (ppm)"])
+st.table(future_df)
 
-# Gráfico de comparación de predicciones
-st.subheader("Comparación de Predicciones")
-fig, ax = plt.subplots()
-ax.bar(df_metrics['Model'], df_metrics['Predicción CO₂ (ppm)'], color=['blue', 'green', 'orange', 'purple'])
-ax.set_ylabel("CO₂ Predicho (ppm)")
-st.pyplot(fig)
+# Gráfico de predicciones
+st.line_chart(future_df.set_index("Fecha y Hora"))
 
-# Predicción a lo largo del día
-st.subheader("Predicciones de CO₂ a lo largo del día")
-horas = [hour + i for i in range(6)]  # Incremento de 6 horas
-predicciones_dia = [predecir_concentracion_co2(modelo_linear_regression, year, month, day, h % 24, temperature, humidity, light_intensity) for h in horas]
-
-fig, ax = plt.subplots()
-ax.plot(horas, predicciones_dia, marker='o')
-ax.set_xlabel("Hora")
-ax.set_ylabel("Predicción de CO₂ (ppm)")
-st.pyplot(fig)
+st.subheader("Aviso de Seguridad")
+threshold = 400
+if co2_prediction > threshold:
+    st.error("¡Alerta! La concentración de CO₂ para la jornada establecida supera el límite de seguridad.")
+else:
+    st.success("La concentración de CO₂ para la jornada establecida está dentro de los límites de seguridad.")
