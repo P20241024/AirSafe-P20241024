@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 # Cargar el modelo y el escalador
@@ -65,6 +66,37 @@ st.table(future_df)
 
 # Gráfico de predicciones
 st.line_chart(future_df.set_index("Fecha y Hora"))
+
+# Crear el gráfico de barras con colores específicos para los niveles de CO₂
+st.subheader("Gráfico de Predicciones de CO₂")
+limite_co2 = 400  # Límite de seguridad para el CO₂ en ppm
+horas_del_dia_str = [pred[0][-5:] for pred in future_predictions]  # Extraer solo la hora de cada timestamp
+predicciones_por_hora = [pred[1] for pred in future_predictions]
+colores = ['red' if pred > limite_co2 else 'green' for pred in predicciones_por_hora]
+
+# Crear el gráfico de barras
+plt.figure(figsize=(8, 6))
+barras = plt.bar(horas_del_dia_str, predicciones_por_hora, color=colores)
+
+# Añadir etiquetas en cada barra para mostrar el valor de la predicción
+for barra, pred in zip(barras, predicciones_por_hora):
+    altura = barra.get_height()
+    color_texto = 'red' if pred > limite_co2 else 'green'
+    etiqueta = f"{pred:.2f}\n{'CO2 Peligroso' if pred > limite_co2 else 'CO2 Seguro'}"
+    plt.text(barra.get_x() + barra.get_width() / 2, altura - 3, etiqueta, ha='center', va='bottom', fontsize=10, color=color_texto)
+
+# Configurar el gráfico
+plt.xlabel('Hora del día')
+plt.ylabel('Predicciones de CO₂ (ppm)')
+plt.title(f'Predicciones de CO₂ a lo largo del día - {current_time.strftime("%Y-%m-%d")}')
+plt.ylim(0, max(predicciones_por_hora) * 1.1)
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.tight_layout()
+
+# Mostrar el gráfico en Streamlit
+st.pyplot(plt)
+
 
 st.subheader("Aviso de Seguridad")
 threshold = 400
